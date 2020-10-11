@@ -2,7 +2,8 @@ from flask import Flask
 from flask_restplus import Resource
 from flask_util import SecureApi
 from os import path
-from .patreon import get_patrons
+from .patreon import fetch_patrons
+import time
 
 
 name = "Servey Patrons"
@@ -32,7 +33,17 @@ whitelist = [  # Only report these fields
 
 if not path.isfile(patrons_path):
     raise FileNotFoundError("Patrons CSV file not found!")
-patrons = get_patrons(patrons_path, whitelist)
+
+patrons = {"list": [], "updated": 0.0}
+
+
+def get_patrons():
+    # Cache patrons list for up to an hour, make a new API call once we go over that limit
+    if patrons["updated"] + 3600 < time.time() or not patrons["list"]:
+        print("Cache outdated, making a new Patreon API call!")
+        patrons["list"] = fetch_patrons()
+        patrons["updated"] = time.time()
+    return patrons["list"]
 
 
 @api.route("/patrons")
@@ -40,7 +51,8 @@ class PatronsList(Resource):
     # All patrons
     @staticmethod
     def get():
-        return [patron for patron in list(patrons.values())]
+        return get_patrons()
+
 
 
 @api.route("/patrons/sorted")
